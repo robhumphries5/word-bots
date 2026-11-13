@@ -14,7 +14,8 @@ Approach: agile. Ship a small MVP, put it in front of him, iterate.
 
 ### Battle
 - One enemy: a cross robot (chess-bot style opponent), SVG art animated in code.
-- Robot has 8 HP (8 correct answers to win). Player has 5 hearts (lose one per wrong answer).
+  - *Update (#3):* now a roster of 6 original robots, one per level; a new level every 3 robots beaten (see `src/game/levels.ts`).
+- Robot has 8 HP (8 correct answers to win; later robots have 9–10). Player has 5 hearts (lose one per wrong answer).
 - Lose → instant retry, no penalty, robot taunts a bit. Win → victory screen → next battle.
 - No story for MVP — just battle after battle.
 - Simple sound effects generated in code (Web Audio): zap on correct, clunk on wrong, victory jingle. Mute button.

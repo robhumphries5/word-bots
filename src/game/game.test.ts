@@ -2,7 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { FACTS, TRUSTED_DOMAINS } from '../content/facts';
 import { WORDS } from '../content/words';
 import { ChallengeDealer, unlockedLevel } from './challenges';
-import { emptyProgress, recordAnswer, weightFor } from './progress';
+import {
+  BATTLES_PER_LEVEL, beatenThisLevel, levelFor, levelsUpAfterWin, robotFor, ROBOTS,
+} from './levels';
+import { emptyProgress, RECENT_BATTLES, recordAnswer, resetProgress, weightFor } from './progress';
 import { isSpelt, makeTiles, markSlots } from './spelling';
 import { makeSum, parseSumId, randomSum, solve, TABLES } from './sums';
 
@@ -109,22 +112,68 @@ describe('spelling', () => {
 });
 
 describe('dealing a battle', () => {
-  it('mixes types roughly a third each, with no repeats', () => {
-    const dealer = new ChallengeDealer(emptyProgress(), seeded(11));
-    const deal = Array.from({ length: 12 }, () => dealer.next());
-    expect(new Set(deal.map((c) => c.id)).size).toBe(12);
-    for (const t of ['spelling', 'fact', 'sum']) expect(deal.filter((c) => c.type === t)).toHaveLength(4);
+  it('mixes types roughly a third each, never three in a row, with no repeats', () => {
+    const counts: Record<string, number> = { spelling: 0, fact: 0, sum: 0 };
+    for (let seed = 0; seed < 50; seed++) {
+      const dealer = new ChallengeDealer(emptyProgress(), seeded(seed));
+      const deal = Array.from({ length: 12 }, () => dealer.next());
+      expect(new Set(deal.map((c) => c.id)).size).toBe(12);
+      for (let i = 2; i < deal.length; i++) {
+        expect(deal[i].type === deal[i - 1].type && deal[i].type === deal[i - 2].type).toBe(false);
+      }
+      for (const c of deal) counts[c.type]++;
+    }
+    for (const n of Object.values(counts)) expect(n / 600).toBeGreaterThan(0.25);
   });
 
-  it('starts with easy words and unlocks harder ones', () => {
+  it('does not always use the same type pattern', () => {
+    const patterns = new Set<string>();
+    for (let seed = 0; seed < 20; seed++) {
+      const dealer = new ChallengeDealer(emptyProgress(), seeded(seed));
+      patterns.add(Array.from({ length: 6 }, () => dealer.next().type[0]).join(''));
+    }
+    expect(patterns.size).toBeGreaterThan(10);
+  });
+
+  it('starts with mostly easy words, a few from the next level, and unlocks harder ones', () => {
     expect(unlockedLevel(0)).toBe(1);
     expect(unlockedLevel(3)).toBe(2);
     expect(unlockedLevel(99)).toBe(3);
-    const dealer = new ChallengeDealer(emptyProgress(), seeded(5));
-    for (let i = 0; i < 12; i++) {
-      const c = dealer.next();
-      if (c.type === 'spelling') expect(c.word.level).toBe(1);
+    const levels: number[] = [];
+    for (let seed = 0; seed < 50; seed++) {
+      const dealer = new ChallengeDealer(emptyProgress(), seeded(seed));
+      for (let i = 0; i < 12; i++) {
+        const c = dealer.next();
+        if (c.type === 'spelling') levels.push(c.word.level);
+      }
     }
+    expect(levels).not.toContain(3);
+    const easy = levels.filter((l) => l === 1).length / levels.length;
+    expect(easy).toBeGreaterThan(0.6);
+    expect(easy).toBeLessThan(1);
+  });
+
+  it('mostly avoids questions from the last couple of battles', () => {
+    let repeats = 0, total = 0;
+    for (let seed = 0; seed < 50; seed++) {
+      const p = emptyProgress();
+      const rng = seeded(seed);
+      const first = new Set<string>();
+      const d1 = new ChallengeDealer(p, rng);
+      for (let i = 0; i < 10; i++) first.add(d1.next().id);
+      const d2 = new ChallengeDealer(p, rng);
+      const second = Array.from({ length: 10 }, () => d2.next()).filter((c) => c.type === 'fact');
+      total += second.length;
+      repeats += second.filter((c) => first.has(c.id)).length;
+    }
+    // Without memory, about 1 in 8 facts would repeat from the battle before.
+    expect(repeats / total).toBeLessThan(0.05);
+  });
+
+  it('only remembers the last couple of battles', () => {
+    const p = emptyProgress();
+    for (let i = 0; i < 5; i++) new ChallengeDealer(p, seeded(i)).next();
+    expect(p.recent).toHaveLength(RECENT_BATTLES + 1);
   });
 
   it('brings missed items back more often until answered correctly', () => {
@@ -152,5 +201,42 @@ describe('dealing a battle', () => {
       seen = Array.from({ length: 12 }, () => dealer.next().id).includes('word:favourite');
     }
     expect(seen).toBe(true);
+  });
+});
+
+describe('levels and robots', () => {
+  it('goes up a level every few robots beaten', () => {
+    expect(BATTLES_PER_LEVEL).toBe(3);
+    expect(levelFor(0)).toBe(1);
+    expect(levelFor(2)).toBe(1);
+    expect(levelFor(3)).toBe(2);
+    expect(beatenThisLevel(4)).toBe(1);
+    expect(levelsUpAfterWin(2)).toBe(true);
+    expect(levelsUpAfterWin(3)).toBe(false);
+  });
+
+  it('changes robot each level and cycles round after the last', () => {
+    expect(robotFor(0).name).toBe('Rook-Bot');
+    expect(robotFor(2).name).toBe('Rook-Bot');
+    expect(robotFor(3).name).not.toBe('Rook-Bot');
+    expect(robotFor(3 * ROBOTS.length).name).toBe('Rook-Bot');
+    expect(new Set(ROBOTS.map((r) => r.name)).size).toBe(ROBOTS.length);
+  });
+
+  it('robot lines use British spelling', () => {
+    for (const r of ROBOTS) for (const t of [...r.greetings, ...r.taunts]) expect(t, t).not.toMatch(AMERICAN);
+  });
+});
+
+describe('reset', () => {
+  it('clears progress but keeps the sound setting', () => {
+    const p = emptyProgress();
+    p.battlesWon = 7;
+    p.muted = true;
+    p.playerName = 'Test';
+    recordAnswer(p, 'fact:googol', false);
+    new ChallengeDealer(p, seeded(1)).next();
+    resetProgress(p);
+    expect(p).toEqual({ ...emptyProgress(), muted: true });
   });
 });

@@ -99,7 +99,26 @@ button:disabled { cursor: default; }
   user-select: text;
 }
 .name-input::placeholder { color: #ffffff90; }
-.corner { position: absolute; top: 2vh; right: 2vw; }
+.corner { position: absolute; top: 2vh; right: 2vw; display: flex; gap: 0.6rem; }
+
+.level-badge { display: flex; flex-direction: column; gap: 0.5rem; }
+.level-num { font-size: clamp(1.6rem, 5vh, 2.4rem); font-weight: 700; color: #fff; }
+.level-bar { display: flex; gap: 6px; }
+.level-bar .step { width: 3.2rem; height: 1rem; border-radius: 6px; background: #ffffff25; }
+.level-bar .step.done { background: var(--accent); box-shadow: 0 3px 0 #c79a12; }
+.level-text { font-size: 1.1rem; color: #ffffffc0; }
+.level-chip {
+  font-weight: 700;
+  font-size: 1.2rem;
+  padding: 0.3em 0.9em;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--ink);
+}
+
+.btn-row { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; }
+.big-btn.danger { background: var(--bad); box-shadow: 0 6px 0 #c33; color: #fff; }
+.big-btn.danger:active { box-shadow: 0 2px 0 #c33; }
 
 /* ---------- battle layout ---------- */
 

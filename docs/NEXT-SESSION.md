@@ -1,6 +1,6 @@
 # Notes for the next session
 
-Last updated: 2026-11-13.
+Last updated: 2026-11-13 (second session).
 
 ## Where things are
 - **v1 is live:** https://robhumphries5.github.io/word-bots/ (public repo `robhumphries5/word-bots`, branch `main`).
@@ -10,8 +10,9 @@ Last updated: 2026-11-13.
 - **Plan:** see [PLAN.md](PLAN.md). Project rules are in `CLAUDE.md`.
 
 ## Open requests (GitHub issues)
-1. [#1 Option to clear saved data](https://github.com/robhumphries5/word-bots/issues/1): a parent reset with confirmation.
-2. [#2 Questions feel like they come in the same order](https://github.com/robhumphries5/word-bots/issues/2): this couldn't be reproduced on fresh browsers. The likely causes are the fixed spelling/fact/sum rhythm, the small level-1 word pool, and no memory of the last battle. The issue has a fix list and a question for the parent.
+1. [#1 Option to clear saved data](https://github.com/robhumphries5/word-bots/issues/1): **done.** There's a ⚙️ Grown-ups panel on the title screen with an in-app confirm. It keeps the mute setting.
+2. [#2 Questions feel like they come in the same order](https://github.com/robhumphries5/word-bots/issues/2): **done in code.** Question types are now picked at random (never 3 of a kind in a row). Ids from the last 2 battles are down-weighted to 0.1 (`progress.recent`). Words from the next spelling level come in at ¼ weight. More content (#3) will help further.
+3. [#3 More questions, new enemies, visible level](https://github.com/robhumphries5/word-bots/issues/3): **enemies and level are done.** There are 6 robots in `src/game/levels.ts`, with a new robot and level every 3 wins, and the robots cycle round after Level 6. The level badge and progress bar are on the title screen, a level chip is in the battle bar, and there's a "Level up!" victory screen. **Still to do: more questions** (about 60 words and 60+ facts, each with a verified trusted source).
 
 ## Content size today
 | Kind | Count |

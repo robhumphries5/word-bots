@@ -1,6 +1,7 @@
 import { FACTS, type Fact } from '../content/facts';
 import { WORDS, type SpellingWord } from '../content/words';
-import { weightFor, type Progress } from './progress';
+import { levelFor } from './levels';
+import { startRecent, weightFor, type Progress } from './progress';
 import { shuffle, weightedPick, type Rng } from './random';
 import { makeSum, parseSumId, randomSum, type Sum } from './sums';
 
@@ -12,24 +13,35 @@ export type Challenge =
   | { type: 'sum'; id: string; sum: Sum };
 
 /** Spelling level unlocked: starts at 1, one more every 3 battles won. */
-export const unlockedLevel = (battlesWon: number) => Math.min(3, 1 + Math.floor(battlesWon / 3));
+export const unlockedLevel = (battlesWon: number) => Math.min(3, levelFor(battlesWon));
+
+/** Words from the level above are let in this much less often, for variety. */
+const NEXT_LEVEL_WEIGHT = 0.25;
+const TYPES: ChallengeType[] = ['spelling', 'fact', 'sum'];
 
 /**
- * Deals the challenges for one battle: types come in shuffled rounds of three
- * (so roughly a third each), nothing repeats within the battle, and missed
- * items come back more often.
+ * Deals the challenges for one battle: types are picked at random (about a
+ * third each, never three of a kind in a row), nothing repeats within the
+ * battle, missed items come back more often, and items from the last couple of
+ * battles are mostly avoided. Starting a dealer starts a new battle's memory.
  */
 export class ChallengeDealer {
   private used = new Set<string>();
-  private typeQueue: ChallengeType[] = [];
+  private lastTypes: ChallengeType[] = [];
+  private dealt: string[];
 
-  constructor(private progress: Progress, private rng: Rng) {}
+  constructor(private progress: Progress, private rng: Rng) {
+    this.dealt = startRecent(progress);
+  }
 
   next(): Challenge {
-    if (this.typeQueue.length === 0) this.typeQueue = shuffle(['spelling', 'fact', 'sum'] as ChallengeType[], this.rng);
-    const type = this.typeQueue.shift()!;
+    const [a, b] = this.lastTypes.slice(-2);
+    const types = a !== undefined && a === b ? TYPES.filter((t) => t !== a) : TYPES;
+    const type = types[Math.floor(this.rng() * types.length)];
+    this.lastTypes.push(type);
     const c = type === 'spelling' ? this.spelling() : type === 'fact' ? this.fact() : this.sum();
     this.used.add(c.id);
+    this.dealt.push(c.id);
     return c;
   }
 
@@ -39,10 +51,12 @@ export class ChallengeDealer {
 
   private spelling(): Challenge {
     const level = unlockedLevel(this.progress.battlesWon);
-    let pool = this.fresh(WORDS.filter((w) => w.level <= level || this.progress.missed[w.id]));
+    let pool = this.fresh(WORDS.filter((w) => w.level <= level + 1 || this.progress.missed[w.id]));
     if (pool.length === 0) pool = this.fresh(WORDS);
     if (pool.length === 0) pool = WORDS;
-    const word = weightedPick(pool, (w) => weightFor(this.progress, w.id), this.rng);
+    const weight = (w: SpellingWord) =>
+      weightFor(this.progress, w.id) * (w.level > level && !this.progress.missed[w.id] ? NEXT_LEVEL_WEIGHT : 1);
+    const word = weightedPick(pool, weight, this.rng);
     return { type: 'spelling', id: word.id, word };
   }
 
@@ -65,7 +79,8 @@ export class ChallengeDealer {
       return { type: 'sum', id: sum.id, sum };
     }
     let sum = randomSum(this.rng);
-    for (let tries = 0; this.used.has(sum.id) && tries < 50; tries++) sum = randomSum(this.rng);
+    const avoid = (id: string) => this.used.has(id) || weightFor(this.progress, id) < 1;
+    for (let tries = 0; avoid(sum.id) && tries < 50; tries++) sum = randomSum(this.rng);
     return { type: 'sum', id: sum.id, sum };
   }
 }
@@ -80,4 +95,4 @@ export interface BattleState {
   readsLeft: number;
 }
 
-export const newBattle = (): BattleState => ({ robotHp: ROBOT_HP, hearts: PLAYER_HEARTS, readsLeft: READS_PER_BATTLE });
+export const newBattle = (robotHp = ROBOT_HP): BattleState => ({ robotHp, hearts: PLAYER_HEARTS, readsLeft: READS_PER_BATTLE });

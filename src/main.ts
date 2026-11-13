@@ -3,24 +3,20 @@ import '@fontsource/andika/latin-700.css';
 import './style.css';
 
 import {
-  ChallengeDealer, newBattle, PLAYER_HEARTS, ROBOT_HP,
+  ChallengeDealer, newBattle, PLAYER_HEARTS,
   type BattleState, type Challenge,
 } from './game/challenges';
-import { loadProgress, recordAnswer, saveProgress, type Store } from './game/progress';
+import {
+  BATTLES_PER_LEVEL, beatenThisLevel, levelFor, levelsUpAfterWin, robotFor, type RobotDesign,
+} from './game/levels';
+import { loadProgress, recordAnswer, resetProgress, saveProgress, type Store } from './game/progress';
 import { isSpelt, makeTiles, markSlots } from './game/spelling';
 import { sumSpoken, sumText } from './game/sums';
 import { Robot } from './ui/robot';
 import { setMuted, sfx } from './ui/sound';
 import { canSpeak, speak, stopSpeaking } from './ui/speech';
 
-const ROBOT_NAME = 'Rook-Bot';
-
-const TAUNTS = [
-  'Beep boop! Rook-Bot wins! Want another go?',
-  'Ha! My circuits are too clever! Try again!',
-  'Bzzzt! Is that all you have got?',
-  'Clank clank! Come back and fight me!',
-];
+const TAUNTS = ['Bzzzt! Is that all you have got?', 'Beep boop! Want another go?'];
 const OUCH = ['Ouch!', 'Bzzt!', 'Clonk!', 'Oof!', 'Zap!', 'Argh!'];
 
 function storage(): Store | undefined {
@@ -79,9 +75,57 @@ function muteButton(): HTMLElement {
 
 // --- title screen ----------------------------------------------------------
 
+/** "Level 2 · 1 of 3 robots beaten", plus a little progress bar. */
+function levelBadge(): HTMLElement {
+  const won = progress.battlesWon;
+  const done = beatenThisLevel(won);
+  return h('div', { class: 'level-badge' },
+    h('div', { class: 'level-num' }, `Level ${levelFor(won)}`),
+    h('div', { class: 'level-bar', 'aria-hidden': 'true' },
+      ...Array.from({ length: BATTLES_PER_LEVEL }, (_, i) => h('span', { class: i < done ? 'step done' : 'step' })),
+    ),
+    h('div', { class: 'level-text' }, `${done} of ${BATTLES_PER_LEVEL} robots beaten`),
+  );
+}
+
+function settingsButton(): HTMLElement {
+  return h('button', { class: 'icon-btn', 'aria-label': 'Grown-ups: settings', onClick: showSettings }, '⚙️');
+}
+
+/** A grown-up panel for clearing progress, with an in-app confirm. */
+function showSettings(): void {
+  sfx.tap();
+  const box = h('div', { class: 'overlay-box' });
+  const close = () => box.parentElement?.remove();
+  const ask = () => box.replaceChildren(
+    h('h2', {}, 'Clear all progress?'),
+    h('p', {}, 'This clears levels, robots beaten, missed questions and the name. It can’t be undone.'),
+    h('div', { class: 'btn-row' },
+      h('button', { class: 'big-btn go', onClick: close }, 'Cancel'),
+      h('button', {
+        class: 'big-btn danger', onClick: () => {
+          resetProgress(progress);
+          save();
+          showTitle();
+        },
+      }, 'Clear'),
+    ),
+  );
+  box.append(
+    h('h2', {}, 'Grown-ups'),
+    h('p', { class: 'small' }, 'Progress is saved on this device only.'),
+    h('div', { class: 'btn-row' },
+      h('button', { class: 'big-btn go', onClick: close }, 'Back'),
+      h('button', { class: 'big-btn danger', onClick: ask }, 'Reset progress'),
+    ),
+  );
+  app.querySelector('.title-screen')?.append(h('div', { class: 'overlay' }, box));
+}
+
 function showTitle(): void {
   stopSpeaking();
-  const robot = new Robot();
+  const design = robotFor(progress.battlesWon);
+  const robot = new Robot(design);
   const name = h('input', {
     class: 'name-input', type: 'text', maxlength: '20', placeholder: 'Your name (optional)',
     autocomplete: 'off', 'aria-label': 'Your name (optional)',
@@ -107,9 +151,10 @@ function showTitle(): void {
             startBattle();
           },
         }, 'Fight!'),
-        h('p', { class: 'wins' }, progress.battlesWon > 0 ? `Robots beaten: ${progress.battlesWon}` : ''),
+        levelBadge(),
+        h('p', { class: 'wins' }, `Next up: ${design.name}`),
       ),
-      h('div', { class: 'corner' }, muteButton()),
+      h('div', { class: 'corner' }, settingsButton(), muteButton()),
     ),
   );
 }
@@ -117,6 +162,7 @@ function showTitle(): void {
 // --- battle ----------------------------------------------------------------
 
 interface Battle {
+  design: RobotDesign;
   state: BattleState;
   dealer: ChallengeDealer;
   robot: Robot;
@@ -133,10 +179,12 @@ let battle: Battle;
 
 function startBattle(): void {
   stopSpeaking();
-  const robot = new Robot();
+  const design = robotFor(progress.battlesWon);
+  const robot = new Robot(design);
   const hearBtn = h('button', { class: 'hear-btn', onClick: hearIt }) as HTMLButtonElement;
   battle = {
-    state: newBattle(),
+    design,
+    state: newBattle(design.hp),
     dealer: new ChallengeDealer(progress, Math.random),
     robot,
     card: h('div', { class: 'card' }),
@@ -152,6 +200,7 @@ function startBattle(): void {
     h('div', { class: 'battle' },
       h('header', { class: 'topbar' },
         battle.heartsEl,
+        h('div', { class: 'level-chip' }, `Level ${levelFor(progress.battlesWon)}`),
         h('div', { class: 'top-actions' },
           hearBtn,
           muteButton(),
@@ -160,7 +209,7 @@ function startBattle(): void {
       ),
       h('main', { class: 'arena' },
         h('section', { class: 'robot-side' },
-          h('div', { class: 'robot-name' }, ROBOT_NAME),
+          h('div', { class: 'robot-name' }, design.name),
           battle.hpEl,
           battle.bubble,
           robot.el,
@@ -170,7 +219,7 @@ function startBattle(): void {
     ),
   );
   paintStatus();
-  say(pick(['Grrr! Answer my questions if you dare!', 'Beep! Ready to battle?', 'Rook-Bot is here! Prepare yourself!']));
+  say(pick(design.greetings));
   nextChallenge();
 }
 
@@ -180,7 +229,7 @@ function paintStatus(): void {
     ...Array.from({ length: PLAYER_HEARTS }, (_, i) => heartIcon(i < state.hearts)),
   );
   battle.hpEl.replaceChildren(
-    ...Array.from({ length: ROBOT_HP }, (_, i) => h('span', { class: i < state.robotHp ? 'pip' : 'pip empty' })),
+    ...Array.from({ length: battle.design.hp }, (_, i) => h('span', { class: i < state.robotHp ? 'pip' : 'pip empty' })),
   );
   const ok = canSpeak() && state.readsLeft > 0 && !battle.over;
   battle.hearBtn.disabled = !ok;
@@ -448,15 +497,20 @@ function overlay(...kids: (Node | string)[]): void {
 }
 
 function win(): void {
+  const levelUp = levelsUpAfterWin(progress.battlesWon);
   progress.battlesWon++;
   save();
   sfx.victory();
   battle.robot.play('defeated');
   const who = progress.playerName ? `Well done, ${progress.playerName}!` : 'Well done!';
+  const next = robotFor(progress.battlesWon);
+  const done = beatenThisLevel(progress.battlesWon);
   overlay(
-    h('h2', {}, 'Victory!'),
-    h('p', {}, `${who} You beat ${ROBOT_NAME}!`),
-    h('p', { class: 'small' }, `Robots beaten: ${progress.battlesWon}`),
+    h('h2', {}, levelUp ? 'Level up!' : 'Victory!'),
+    h('p', {}, `${who} You beat ${battle.design.name}!`),
+    h('p', { class: 'small' }, levelUp
+      ? `You are now on Level ${levelFor(progress.battlesWon)}. Watch out, ${next.name} is coming!`
+      : `${done} of ${BATTLES_PER_LEVEL} robots beaten on Level ${levelFor(progress.battlesWon)}`),
     h('button', { class: 'big-btn go', onClick: () => { sfx.tap(); startBattle(); } }, 'Next battle ▶'),
   );
 }
@@ -464,10 +518,10 @@ function win(): void {
 function lose(): void {
   sfx.lose();
   battle.robot.play('taunt');
-  say(pick(TAUNTS), 4000);
+  say(pick([...battle.design.taunts, ...TAUNTS]), 4000);
   overlay(
     h('h2', {}, 'Out of hearts!'),
-    h('p', {}, `${ROBOT_NAME} won this time. You can beat it!`),
+    h('p', {}, `${battle.design.name} won this time. You can beat it!`),
     h('button', { class: 'big-btn go', onClick: () => { sfx.tap(); startBattle(); } }, 'Try again ↻'),
   );
 }
