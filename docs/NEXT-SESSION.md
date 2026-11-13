@@ -16,7 +16,7 @@ Last updated: 2026-11-13 (second session).
 
 ## Spelling hints (added 2026-11-13)
 - The 💡 Hint button puts one right letter in its slot, choosing a consonant first, and shows it in blue. A word gets 1 hint up to 4 letters, 2 for 5–6 letters and 3 for longer words (`hintsFor` / `pickHint` in `src/game/spelling.ts`).
-- Using a hint doesn't count against the player.
+- Using a hint doesn't count against the player, but it costs the double hit: a word spelt right first time with no hints knocks 2 pips off the robot ("Perfect! Double hit!"). Any other right answer knocks off 1.
 - Also fixed: locked (green) letters could be dragged out of their slots.
 
 ## Content size today

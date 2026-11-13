@@ -271,16 +271,19 @@ function nextChallenge(): void {
   }
 }
 
-/** Applies a right or wrong answer. Resolves to true if the battle carries on. */
-async function resolve(correct: boolean): Promise<boolean> {
+/**
+ * Applies a right or wrong answer; `damage` is how many energy pips a right
+ * answer knocks off. Resolves to true if the battle carries on.
+ */
+async function resolve(correct: boolean, damage = 1): Promise<boolean> {
   const { state, robot } = battle;
   recordAnswer(progress, battle.current!.id, correct);
   save();
   if (correct) {
-    state.robotHp--;
+    state.robotHp = Math.max(0, state.robotHp - damage);
     sfx.zap();
     robot.play('hit');
-    say(pick(OUCH), 900);
+    say(damage > 1 ? 'Double hit! Bzzzt!' : pick(OUCH), damage > 1 ? 1500 : 900);
   } else {
     state.hearts--;
     sfx.clunk();
@@ -477,9 +480,11 @@ function renderSpelling(c: Extract<Challenge, { type: 'spelling' }>): void {
     if (isSpelt(word, placed)) {
       done = true;
       word.split('').forEach((_, i) => (locked[i] = true));
-      message.textContent = 'Brilliant!';
+      // Right first time with no hints: a double hit.
+      const perfect = attempts === 0 && hintsLeft === hintsFor(word);
+      message.textContent = perfect ? 'Perfect! Double hit!' : 'Brilliant!';
       paint();
-      if (await resolve(true)) {
+      if (await resolve(true, perfect ? 2 : 1)) {
         await wait(900);
         nextChallenge();
       }
