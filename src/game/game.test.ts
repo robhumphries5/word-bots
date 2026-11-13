@@ -30,9 +30,9 @@ describe('content', () => {
     for (const t of allText) expect(t, t).not.toMatch(AMERICAN);
   });
 
-  it('has about 30 words and 30 facts with unique ids', () => {
-    expect(WORDS.length).toBeGreaterThanOrEqual(30);
-    expect(FACTS.length).toBeGreaterThanOrEqual(30);
+  it('has plenty of words and facts with unique ids', () => {
+    expect(WORDS.length).toBeGreaterThanOrEqual(100);
+    expect(FACTS.length).toBeGreaterThanOrEqual(70);
     const ids = [...WORDS, ...FACTS].map((x) => x.id);
     expect(new Set(ids).size).toBe(ids.length);
   });
@@ -159,29 +159,48 @@ describe('dealing a battle', () => {
 
   it('does not always use the same type pattern', () => {
     const patterns = new Set<string>();
+    // Seeds spread out: with neighbouring seeds this simple RNG's first draws are almost identical.
     for (let seed = 0; seed < 20; seed++) {
-      const dealer = new ChallengeDealer(emptyProgress(), seeded(seed));
+      const dealer = new ChallengeDealer(emptyProgress(), seeded(seed * 104729));
       patterns.add(Array.from({ length: 6 }, () => dealer.next().type[0]).join(''));
     }
     expect(patterns.size).toBeGreaterThan(10);
   });
 
-  it('starts with mostly easy words, a few from the next level, and unlocks harder ones', () => {
-    expect(unlockedLevel(0)).toBe(1);
-    expect(unlockedLevel(3)).toBe(2);
-    expect(unlockedLevel(99)).toBe(3);
+  const spellingLevels = (battlesWon: number) => {
     const levels: number[] = [];
-    for (let seed = 0; seed < 50; seed++) {
-      const dealer = new ChallengeDealer(emptyProgress(), seeded(seed));
+    for (let seed = 0; seed < 100; seed++) {
+      const p = { ...emptyProgress(), battlesWon };
+      const dealer = new ChallengeDealer(p, seeded(seed));
       for (let i = 0; i < 12; i++) {
         const c = dealer.next();
         if (c.type === 'spelling') levels.push(c.word.level);
       }
     }
-    expect(levels).not.toContain(3);
-    const easy = levels.filter((l) => l === 1).length / levels.length;
+    return levels;
+  };
+
+  it('starts with mostly easy tricky words, a few from the next level, and unlocks harder ones', () => {
+    expect(unlockedLevel(0)).toBe(1);
+    expect(unlockedLevel(3)).toBe(2);
+    expect(unlockedLevel(99)).toBe(3);
+    const tricky = spellingLevels(0).filter((l) => l > 0);
+    expect(tricky).not.toContain(3);
+    const easy = tricky.filter((l) => l === 1).length / tricky.length;
     expect(easy).toBeGreaterThan(0.6);
     expect(easy).toBeLessThan(1);
+  });
+
+  it('keeps sound-it-out words in the mix at every level', () => {
+    expect(WORDS.filter((w) => w.level === 0).length).toBeGreaterThanOrEqual(40);
+    const share = (won: number) => {
+      const levels = spellingLevels(won);
+      return levels.filter((l) => l === 0).length / levels.length;
+    };
+    expect(share(0)).toBeGreaterThan(0.5);
+    expect(share(0)).toBeLessThan(0.7);
+    expect(share(9)).toBeGreaterThan(0.3);
+    expect(share(9)).toBeLessThan(0.5);
   });
 
   it('mostly avoids questions from the last couple of battles', () => {
@@ -211,14 +230,15 @@ describe('dealing a battle', () => {
     const p = emptyProgress();
     recordAnswer(p, 'fact:googol', false);
     expect(weightFor(p, 'fact:googol')).toBeGreaterThan(weightFor(p, 'fact:hexagon'));
-    let seen = 0;
+    let seen = 0, seenOther = 0;
     for (let seed = 0; seed < 200; seed++) {
       const dealer = new ChallengeDealer(p, seeded(seed));
       const ids = Array.from({ length: 12 }, () => dealer.next().id);
       if (ids.includes('fact:googol')) seen++;
+      if (ids.includes('fact:hexagon')) seenOther++;
     }
-    // Baseline chance is about 4 facts out of 32 = 12.5%; missed should be far higher.
-    expect(seen / 200).toBeGreaterThan(0.3);
+    // A missed fact should come up far more often than one that was answered fine.
+    expect(seen).toBeGreaterThan(2 * Math.max(seenOther, 5));
     recordAnswer(p, 'fact:googol', true);
     expect(p.missed['fact:googol']).toBeUndefined();
   });

@@ -15,6 +15,12 @@ export type Challenge =
 /** Spelling level unlocked: starts at 1, one more every 3 battles won. */
 export const unlockedLevel = (battlesWon: number) => Math.min(3, levelFor(battlesWon));
 
+/**
+ * Chance that a spelling question is a sound-it-out word (level 0) rather than
+ * a tricky one, so not every word is a struggle. Higher at the start.
+ */
+export const easyShare = (level: number) => (level <= 1 ? 0.6 : 0.4);
+
 /** Words from the level above are let in this much less often, for variety. */
 const NEXT_LEVEL_WEIGHT = 0.25;
 const TYPES: ChallengeType[] = ['spelling', 'fact', 'sum'];
@@ -51,7 +57,11 @@ export class ChallengeDealer {
 
   private spelling(): Challenge {
     const level = unlockedLevel(this.progress.battlesWon);
-    let pool = this.fresh(WORDS.filter((w) => w.level <= level + 1 || this.progress.missed[w.id]));
+    const easy = this.rng() < easyShare(level);
+    const pick = easy
+      ? WORDS.filter((w) => w.level === 0)
+      : WORDS.filter((w) => w.level > 0 && (w.level <= level + 1 || this.progress.missed[w.id]));
+    let pool = this.fresh(pick);
     if (pool.length === 0) pool = this.fresh(WORDS);
     if (pool.length === 0) pool = WORDS;
     const weight = (w: SpellingWord) =>
