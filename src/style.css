@@ -342,6 +342,9 @@ button:disabled { cursor: default; }
 .slot { background: var(--slot); border: 3px dashed #b9b29a; color: var(--ink); }
 .slot.filled { border-style: solid; background: var(--tile); border-color: #e0b84a; }
 .slot.locked { background: var(--good); border-color: var(--good); color: #fff; }
+.slot.hinted { background: #4aa8ff; border-color: #4aa8ff; color: #fff; }
+.big-btn.hint { background: #fff; box-shadow: 0 6px 0 #c9cde0; }
+.big-btn.hint:active:not(:disabled) { box-shadow: 0 2px 0 #c9cde0; }
 .tile {
   background: var(--tile);
   border: 3px solid #e0b84a;

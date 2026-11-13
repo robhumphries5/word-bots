@@ -6,7 +6,7 @@ import {
   BATTLES_PER_LEVEL, beatenThisLevel, levelFor, levelsUpAfterWin, robotFor, ROBOTS,
 } from './levels';
 import { emptyProgress, RECENT_BATTLES, recordAnswer, resetProgress, weightFor } from './progress';
-import { isSpelt, makeTiles, markSlots } from './spelling';
+import { hintsFor, isSpelt, makeTiles, markSlots, pickHint } from './spelling';
 import { makeSum, parseSumId, randomSum, solve, TABLES } from './sums';
 
 /** Small seeded RNG so tests are repeatable. */
@@ -108,6 +108,37 @@ describe('spelling', () => {
     expect(markSlots('heart', ['h', 'a', 'e', 'r', 't'])).toEqual([true, false, false, true, true]);
     expect(isSpelt('heart', ['h', 'e', 'a', 'r', 't'])).toBe(true);
     expect(isSpelt('heart', ['h', 'e', 'a', 'r', null])).toBe(false);
+  });
+});
+
+describe('spelling hints', () => {
+  it('gives 1 hint up to 4 letters, 2 for 5 or 6, 3 for longer', () => {
+    expect(hintsFor('cat')).toBe(1);
+    expect(hintsFor('bird')).toBe(1);
+    expect(hintsFor('heart')).toBe(2);
+    expect(hintsFor('friend')).toBe(2);
+    expect(hintsFor('because')).toBe(3);
+    expect(hintsFor('favourite')).toBe(3);
+  });
+
+  it('reveals consonants first, never a locked or already-right slot', () => {
+    const word = 'favourite';
+    const rng = seeded(4);
+    for (let n = 0; n < 200; n++) {
+      const locked = word.split('').map((_, i) => i === 0);
+      const placed: (string | null)[] = word.split('').map((_, i) => (i === 2 ? 'v' : null));
+      const i = pickHint(word, locked, placed, rng)!;
+      expect([0, 2]).not.toContain(i);
+      expect('aeiou').not.toContain(word[i]);
+    }
+  });
+
+  it('falls back to vowels, then to nothing', () => {
+    const rng = seeded(9);
+    const word = 'oat';
+    expect(pickHint(word, [false, false, true], [null, null, 't'], rng)).not.toBeNull();
+    expect('oa').toContain(word[pickHint(word, [false, false, true], [null, null, 't'], rng)!]);
+    expect(pickHint(word, [true, true, true], ['o', 'a', 't'], rng)).toBeNull();
   });
 });
 

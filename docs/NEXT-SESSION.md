@@ -14,6 +14,11 @@ Last updated: 2026-11-13 (second session).
 2. [#2 Questions feel like they come in the same order](https://github.com/robhumphries5/word-bots/issues/2): **done in code.** Question types are now picked at random (never 3 of a kind in a row). Ids from the last 2 battles are down-weighted to 0.1 (`progress.recent`). Words from the next spelling level come in at ¼ weight. More content (#3) will help further.
 3. [#3 More questions, new enemies, visible level](https://github.com/robhumphries5/word-bots/issues/3): **enemies and level are done.** There are 6 robots in `src/game/levels.ts`, with a new robot and level every 3 wins, and the robots cycle round after Level 6. The level badge and progress bar are on the title screen, a level chip is in the battle bar, and there's a "Level up!" victory screen. **Still to do: more questions** (about 60 words and 60+ facts, each with a verified trusted source).
 
+## Spelling hints (added 2026-11-13)
+- The 💡 Hint button puts one right letter in its slot, choosing a consonant first, and shows it in blue. A word gets 1 hint up to 4 letters, 2 for 5–6 letters and 3 for longer words (`hintsFor` / `pickHint` in `src/game/spelling.ts`).
+- Using a hint doesn't count against the player.
+- Also fixed: locked (green) letters could be dragged out of their slots.
+
 ## Content size today
 | Kind | Count |
 |---|---|

@@ -10,7 +10,7 @@ import {
   BATTLES_PER_LEVEL, beatenThisLevel, levelFor, levelsUpAfterWin, robotFor, type RobotDesign,
 } from './game/levels';
 import { loadProgress, recordAnswer, resetProgress, saveProgress, type Store } from './game/progress';
-import { isSpelt, makeTiles, markSlots } from './game/spelling';
+import { hintsFor, isSpelt, makeTiles, markSlots, pickHint } from './game/spelling';
 import { sumSpoken, sumText } from './game/sums';
 import { Robot } from './ui/robot';
 import { setMuted, sfx } from './ui/sound';
@@ -350,6 +350,9 @@ function renderSpelling(c: Extract<Challenge, { type: 'spelling' }>): void {
   /** slot index -> tile index (or null) */
   const slots: (number | null)[] = Array(word.length).fill(null);
   const locked: boolean[] = Array(word.length).fill(false);
+  /** Slots revealed by a hint (shown in a different colour). */
+  const hinted: boolean[] = Array(word.length).fill(false);
+  let hintsLeft = hintsFor(word);
   let attempts = 0;
   let done = false;
 
@@ -357,7 +360,8 @@ function renderSpelling(c: Extract<Challenge, { type: 'spelling' }>): void {
   const tray = h('div', { class: 'tray' });
   const message = h('p', { class: 'spell-msg' });
   const check = h('button', { class: 'big-btn check' }, 'Check ✔') as HTMLButtonElement;
-  const footer = h('div', { class: 'card-footer' }, message, check);
+  const hint = h('button', { class: 'big-btn hint' }) as HTMLButtonElement;
+  const footer = h('div', { class: 'card-footer' }, message, hint, check);
   // Tile size adapts so even the longest word fits on one row.
   for (const row of [slotRow, tray]) row.style.setProperty('--n', String(Math.max(word.length, 5)));
 
@@ -387,11 +391,11 @@ function renderSpelling(c: Extract<Challenge, { type: 'spelling' }>): void {
       ...word.split('').map((ch, i) => {
         const t = slots[i];
         const el = h('div', {
-          class: `slot${locked[i] ? ' locked' : ''}${t !== null ? ' filled' : ''}`,
+          class: `slot${locked[i] ? ' locked' : ''}${hinted[i] && !revealWord ? ' hinted' : ''}${t !== null ? ' filled' : ''}`,
           'data-slot': String(i),
         }, revealWord ? ch : t !== null ? tiles[t] : '');
         if (revealWord) el.classList.add('locked');
-        if (t !== null && !revealWord) attachDrag(el, t, () => unplace(i));
+        if (t !== null && !revealWord && !locked[i]) attachDrag(el, t, () => unplace(i));
         return el;
       }),
     );
@@ -405,7 +409,29 @@ function renderSpelling(c: Extract<Challenge, { type: 'spelling' }>): void {
       }),
     );
     check.disabled = done || slots.some((s) => s === null);
+    hint.textContent = `💡 Hint (${hintsLeft})`;
+    hint.disabled = done || hintsLeft <= 0 || pickHint(word, locked, letters(), Math.random) === null;
   }
+
+  /** Puts one right letter (a consonant if possible) in its slot and locks it. */
+  function giveHint(): void {
+    if (done || hintsLeft <= 0) return;
+    const slot = pickHint(word, locked, letters(), Math.random);
+    if (slot === null) return;
+    const lockedTiles = new Set(slots.filter((t, i) => t !== null && locked[i]));
+    const candidates = tiles.map((_, t) => t).filter((t) => tiles[t] === word[slot] && !lockedTiles.has(t));
+    const tile = candidates.find((t) => !inSlot(t)) ?? candidates[0];
+    if (tile === undefined) return;
+    const from = slots.indexOf(tile);
+    if (from >= 0) slots[from] = null;
+    slots[slot] = tile; // any tile already there goes back to the tray
+    locked[slot] = true;
+    hinted[slot] = true;
+    hintsLeft--;
+    sfx.tap();
+    paint();
+  }
+  hint.addEventListener('click', giveHint);
 
   /** Drag a tile onto a slot, or just tap it. */
   function attachDrag(el: HTMLElement, tile: number, onTap: () => void): void {
