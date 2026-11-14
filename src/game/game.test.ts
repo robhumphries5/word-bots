@@ -7,7 +7,8 @@ import {
 } from './levels';
 import { emptyProgress, RECENT_BATTLES, recordAnswer, resetProgress, weightFor } from './progress';
 import { hintsFor, isSpelt, makeTiles, markSlots, pickHint } from './spelling';
-import { makeSum, parseSumId, randomSum, solve, TABLES } from './sums';
+import { allSums, makeSum, parseSumId, randomSum, solve, TABLES } from './sums';
+import { buildCatalogue, filterCatalogue, groupsOf } from './catalogue';
 
 /** Small seeded RNG so tests are repeatable. */
 function seeded(seed: number) {
@@ -289,5 +290,44 @@ describe('reset', () => {
     new ChallengeDealer(p, seeded(1)).next();
     resetProgress(p);
     expect(p).toEqual({ ...emptyProgress(), muted: true });
+  });
+});
+
+describe('grown-ups question list', () => {
+  const all = buildCatalogue();
+
+  it('lists every word, fact and possible sum once', () => {
+    const sums = allSums();
+    expect(sums.filter((s) => s.op === '+')).toHaveLength(190);
+    expect(sums.filter((s) => s.op === '−')).toHaveLength(190);
+    expect(sums.filter((s) => s.op === '×')).toHaveLength(51);
+    expect(sums.filter((s) => s.op === '÷')).toHaveLength(30);
+    expect(all).toHaveLength(WORDS.length + FACTS.length + sums.length);
+    expect(new Set(all.map((e) => e.id)).size).toBe(all.length);
+  });
+
+  it('includes every sum a battle can deal', () => {
+    const ids = new Set(all.map((e) => e.id));
+    const rng = seeded(7);
+    for (let i = 0; i < 2000; i++) expect(ids.has(randomSum(rng).id)).toBe(true);
+  });
+
+  it('every entry has an answer and a source link', () => {
+    for (const e of all) {
+      expect(e.answer, e.id).not.toBe('');
+      expect(() => new URL(e.source), e.id).not.toThrow();
+    }
+  });
+
+  it('filters by type, group and search words', () => {
+    const facts = filterCatalogue(all, { kind: 'fact', group: '', search: '' });
+    expect(facts).toHaveLength(FACTS.length);
+    const space = filterCatalogue(all, { kind: 'fact', group: 'Space', search: '' });
+    expect(space.length).toBeGreaterThan(0);
+    expect(space.every((e) => e.group === 'Space')).toBe(true);
+    const mars = filterCatalogue(all, { kind: 'all', group: '', search: 'RED planet' });
+    expect(mars.map((e) => e.answer)).toContain('Mars');
+    expect(filterCatalogue(all, { kind: 'all', group: '', search: 'zzzzqqq' })).toHaveLength(0);
+    expect(groupsOf(all, 'sum')).toEqual(['Adding', 'Taking away', 'Times', 'Dividing']);
   });
 });

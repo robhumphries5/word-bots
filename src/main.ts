@@ -9,6 +9,7 @@ import {
 import {
   BATTLES_PER_LEVEL, beatenThisLevel, levelFor, levelsUpAfterWin, robotFor, type RobotDesign,
 } from './game/levels';
+import { buildCatalogue, filterCatalogue, groupsOf, type Entry, type Filter, type Kind } from './game/catalogue';
 import { loadProgress, recordAnswer, resetProgress, saveProgress, type Store } from './game/progress';
 import { hintsFor, isSpelt, makeTiles, markSlots, pickHint } from './game/spelling';
 import { sumSpoken, sumText } from './game/sums';
@@ -116,10 +117,93 @@ function showSettings(): void {
     h('p', { class: 'small' }, 'Progress is saved on this device only.'),
     h('div', { class: 'btn-row' },
       h('button', { class: 'big-btn go', onClick: close }, 'Back'),
+      h('button', { class: 'big-btn', onClick: () => { sfx.tap(); showQuestions(); } }, 'All questions'),
       h('button', { class: 'big-btn danger', onClick: ask }, 'Reset progress'),
     ),
   );
   app.querySelector('.title-screen')?.append(h('div', { class: 'overlay' }, box));
+}
+
+// --- grown-ups: all questions -----------------------------------------------
+
+const KIND_TABS: { kind: Kind | 'all'; name: string }[] = [
+  { kind: 'all', name: 'All' },
+  { kind: 'spelling', name: 'Spelling' },
+  { kind: 'fact', name: 'Facts' },
+  { kind: 'sum', name: 'Sums' },
+];
+const KIND_NAMES: Record<Kind, string> = { spelling: 'Spelling', fact: 'Fact', sum: 'Sum' };
+
+function hostOf(url: string): string {
+  try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return url; }
+}
+
+function questionRow(e: Entry): HTMLElement {
+  const missed = progress.missed[e.id] ?? 0;
+  return h('article', { class: 'q-row' },
+    h('div', { class: 'q-meta' },
+      h('span', { class: `q-kind q-${e.kind}` }, KIND_NAMES[e.kind]),
+      h('span', {}, e.group),
+      missed > 0 ? h('span', { class: 'q-missed' }, `Missed ${missed}×`) : null,
+    ),
+    h('p', { class: 'q-question' }, e.question),
+    h('p', { class: 'q-answer' }, '✔ ', e.answer),
+    e.wrong.length > 0 ? h('p', { class: 'q-wrong' }, '✘ ', e.wrong.join(' · ')) : null,
+    h('a', { class: 'q-source', href: e.source, target: '_blank', rel: 'noopener noreferrer' }, `Source: ${hostOf(e.source)} ↗`),
+  );
+}
+
+/** Every question and answer, with search and filters, for grown-ups to check. */
+function showQuestions(): void {
+  stopSpeaking();
+  const all = buildCatalogue();
+  const filter: Filter = { kind: 'all', group: '', search: '' };
+  const count = h('p', { class: 'q-count', 'aria-live': 'polite' });
+  const list = h('div', { class: 'q-list' });
+  const tabs = h('div', { class: 'q-tabs', role: 'tablist' });
+  const group = h('select', { class: 'q-select', 'aria-label': 'Topic or level' }) as HTMLSelectElement;
+  const search = h('input', {
+    class: 'q-search', type: 'search', placeholder: 'Search questions and answers',
+    autocomplete: 'off', 'aria-label': 'Search questions and answers',
+  }) as HTMLInputElement;
+
+  const paint = () => {
+    tabs.replaceChildren(...KIND_TABS.map((t) => {
+      const n = t.kind === 'all' ? all.length : all.filter((e) => e.kind === t.kind).length;
+      return h('button', {
+        class: `q-tab${filter.kind === t.kind ? ' on' : ''}`, role: 'tab',
+        'aria-selected': String(filter.kind === t.kind),
+        onClick: () => { filter.kind = t.kind; filter.group = ''; paint(); },
+      }, `${t.name} (${n})`);
+    }));
+    const groups = groupsOf(all, filter.kind);
+    group.hidden = groups.length === 0;
+    group.replaceChildren(
+      h('option', { value: '' }, filter.kind === 'spelling' ? 'All levels' : filter.kind === 'sum' ? 'All kinds' : 'All topics'),
+      ...groups.map((g) => h('option', { value: g }, g)),
+    );
+    group.value = filter.group;
+    const shown = filterCatalogue(all, filter);
+    count.textContent = shown.length === 1 ? 'Showing 1 question' : `Showing ${shown.length} questions`;
+    list.replaceChildren(
+      ...(shown.length > 0 ? shown.map(questionRow) : [h('p', { class: 'q-empty' }, 'Nothing matches. Try another search.')]),
+    );
+    list.scrollTop = 0;
+  };
+  group.addEventListener('change', () => { filter.group = group.value; paint(); });
+  search.addEventListener('input', () => { filter.search = search.value; paint(); });
+
+  app.replaceChildren(
+    h('div', { class: 'questions-screen' },
+      h('header', { class: 'q-header' },
+        h('button', { class: 'icon-btn', 'aria-label': 'Back', onClick: () => { sfx.tap(); showTitle(); } }, '←'),
+        h('h2', {}, 'All questions'),
+      ),
+      h('div', { class: 'q-controls' }, tabs, h('div', { class: 'q-filters' }, search, group), count),
+      list,
+    ),
+  );
+  paint();
 }
 
 function showTitle(): void {

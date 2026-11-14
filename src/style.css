@@ -403,3 +403,76 @@ button:disabled { cursor: default; }
 @media (prefers-reduced-motion: reduce) {
   .robot.idle .r-body, .robot.idle .r-eyes { animation: none; }
 }
+
+/* ---------- grown-ups: all questions ---------- */
+
+.questions-screen {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: 2vh 3vw 0;
+  gap: 1rem;
+}
+.q-header { display: flex; align-items: center; gap: 1rem; }
+.q-header h2 { margin: 0; font-size: 2rem; color: var(--accent); }
+.q-controls { display: flex; flex-direction: column; gap: 0.7rem; }
+.q-tabs { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+.q-tab {
+  font-size: 1.05rem;
+  font-weight: 700;
+  padding: 0.45em 1em;
+  border-radius: 999px;
+  background: #ffffff1a;
+  color: #fff;
+}
+.q-tab.on { background: var(--accent); color: var(--ink); }
+.q-filters { display: flex; gap: 0.7rem; flex-wrap: wrap; }
+.q-search, .q-select {
+  font: inherit;
+  font-size: 1.1rem;
+  padding: 0.45em 0.7em;
+  border-radius: 12px;
+  border: 2px solid #ffffff40;
+  background: #ffffff15;
+  color: #fff;
+}
+.q-search { flex: 1; min-width: 12rem; user-select: text; -webkit-user-select: text; }
+.q-search::placeholder { color: #ffffffa0; }
+.q-select option { color: var(--ink); }
+.q-select[hidden] { display: none; }
+.q-count { margin: 0; color: #ffffffc0; }
+.q-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 22rem), 1fr));
+  align-content: start;
+  gap: 0.8rem;
+  padding-bottom: 3vh;
+  user-select: text;
+  -webkit-user-select: text;
+}
+.q-row {
+  background: var(--card);
+  color: var(--ink);
+  border-radius: 14px;
+  padding: 0.8rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.q-row p { margin: 0; }
+.q-meta { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; font-size: 0.9rem; color: var(--muted); }
+.q-kind { font-weight: 700; padding: 0.1em 0.6em; border-radius: 999px; color: #fff; background: var(--muted); }
+.q-kind.q-spelling { background: #4aa8ff; }
+.q-kind.q-fact { background: #9b6bff; }
+.q-kind.q-sum { background: #e08a00; }
+.q-missed { font-weight: 700; color: #c33; }
+.q-question { font-size: 1.1rem; font-weight: 700; }
+.q-answer { color: var(--go-dark); font-weight: 700; }
+.q-wrong { color: #b33; }
+.q-source { margin-top: auto; font-size: 0.9rem; color: #3a5bd9; word-break: break-all; }
+.q-empty { color: #fff; font-size: 1.2rem; }

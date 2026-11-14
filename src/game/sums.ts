@@ -77,3 +77,21 @@ export function sumSpoken(s: { a: number; op: Op; b: number }): string {
   const word = { '+': 'add', '−': 'take away', '×': 'times', '÷': 'divided by' }[s.op];
   return `What is ${s.a} ${word} ${s.b}?`;
 }
+
+/** Every sum `randomSum` can make, in a fixed order (for the grown-ups list). */
+export function allSums(): { a: number; op: Op; b: number }[] {
+  const out: { a: number; op: Op; b: number }[] = [];
+  const seen = new Set<string>();
+  const add = (a: number, op: Op, b: number) => {
+    const id = sumId(a, op, b);
+    if (!seen.has(id)) { seen.add(id); out.push({ a, op, b }); }
+  };
+  for (let a = 1; a <= 19; a++) for (let b = 1; b <= 20 - a; b++) add(a, '+', b);
+  for (let a = 2; a <= 20; a++) for (let b = 1; b < a; b++) add(a, '−', b);
+  for (const t of TABLES) for (let n = 1; n <= 10; n++) { add(n, '×', t); add(t, '×', n); }
+  for (const t of TABLES) for (let n = 1; n <= 10; n++) add(n * t, '÷', t);
+  return out;
+}
+
+/** What the sums practise, in the National Curriculum for maths. */
+export const SUMS_SOURCE = 'https://www.gov.uk/government/publications/national-curriculum-in-england-mathematics-programmes-of-study';
