@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { FACTS, TRUSTED_DOMAINS } from '../content/facts';
+import { READING, type ReadingQuestion } from '../content/reading';
 import { WORDS } from '../content/words';
-import { ChallengeDealer, unlockedLevel } from './challenges';
+import { ALL_CONTENT, ChallengeDealer, unlockedLevel } from './challenges';
+import { markClues } from './clues';
 import {
   BATTLES_PER_LEVEL, beatenThisLevel, levelFor, levelsUpAfterWin, robotFor, ROBOTS,
 } from './levels';
@@ -25,6 +27,7 @@ describe('content', () => {
   const allText = [
     ...WORDS.flatMap((w) => [w.word, w.clue]),
     ...FACTS.flatMap((f) => [f.question, ...f.options]),
+    ...READING.flatMap((q) => [q.passage, q.question, ...q.options]),
   ];
 
   it('uses British spelling', () => {
@@ -34,12 +37,12 @@ describe('content', () => {
   it('has plenty of words and facts with unique ids', () => {
     expect(WORDS.length).toBeGreaterThanOrEqual(100);
     expect(FACTS.length).toBeGreaterThanOrEqual(70);
-    const ids = [...WORDS, ...FACTS].map((x) => x.id);
+    const ids = [...WORDS, ...FACTS, ...READING].map((x) => x.id);
     expect(new Set(ids).size).toBe(ids.length);
   });
 
   it('every item has a source from the trusted list', () => {
-    for (const item of [...WORDS, ...FACTS]) {
+    for (const item of [...WORDS, ...FACTS, ...READING]) {
       const host = new URL(item.source).hostname;
       expect(TRUSTED_DOMAINS.some((d) => host === d || host.endsWith('.' + d)), `${item.id}: ${host}`).toBe(true);
     }
@@ -302,7 +305,7 @@ describe('grown-ups question list', () => {
     expect(sums.filter((s) => s.op === '−')).toHaveLength(190);
     expect(sums.filter((s) => s.op === '×')).toHaveLength(51);
     expect(sums.filter((s) => s.op === '÷')).toHaveLength(30);
-    expect(all).toHaveLength(WORDS.length + FACTS.length + sums.length);
+    expect(all).toHaveLength(WORDS.length + READING.length + FACTS.length + sums.length);
     expect(new Set(all.map((e) => e.id)).size).toBe(all.length);
   });
 
@@ -320,14 +323,87 @@ describe('grown-ups question list', () => {
   });
 
   it('filters by type, group and search words', () => {
-    const facts = filterCatalogue(all, { kind: 'fact', group: '', search: '' });
+    const facts = filterCatalogue(all, { kind: 'fact', group: '', status: 'all', search: '' });
     expect(facts).toHaveLength(FACTS.length);
-    const space = filterCatalogue(all, { kind: 'fact', group: 'Space', search: '' });
+    const space = filterCatalogue(all, { kind: 'fact', group: 'Space', status: 'all', search: '' });
     expect(space.length).toBeGreaterThan(0);
     expect(space.every((e) => e.group === 'Space')).toBe(true);
-    const mars = filterCatalogue(all, { kind: 'all', group: '', search: 'RED planet' });
+    const mars = filterCatalogue(all, { kind: 'all', group: '', status: 'all', search: 'RED planet' });
     expect(mars.map((e) => e.answer)).toContain('Mars');
-    expect(filterCatalogue(all, { kind: 'all', group: '', search: 'zzzzqqq' })).toHaveLength(0);
+    expect(filterCatalogue(all, { kind: 'all', group: '', status: 'all', search: 'zzzzqqq' })).toHaveLength(0);
     expect(groupsOf(all, 'sum')).toEqual(['Adding', 'Taking away', 'Times', 'Dividing']);
+  });
+});
+
+describe('reading questions', () => {
+  it('have a short passage, distinct options including the answer, and clues from the passage', () => {
+    expect(READING.length).toBeGreaterThanOrEqual(15);
+    for (const q of READING) {
+      const sentences = q.passage.split(/[.!?](?:[”’"]?)(?:\s|$)/).filter((x) => x.trim()).length;
+      expect(sentences, q.id).toBeLessThanOrEqual(3);
+      expect(q.options, q.id).toContain(q.answer);
+      expect(new Set(q.options).size, q.id).toBe(q.options.length);
+      expect(q.options.length, q.id).toBeGreaterThanOrEqual(2);
+      expect(q.clues.length, q.id).toBeGreaterThan(0);
+      for (const c of q.clues) expect(q.passage, `${q.id}: ${c}`).toContain(c);
+    }
+  });
+
+  it('marks clue phrases in a passage, merging overlaps', () => {
+    expect(markClues('It was dark and the moon shone.', ['dark', 'moon'])).toEqual([
+      { text: 'It was ', clue: false },
+      { text: 'dark', clue: true },
+      { text: ' and the ', clue: false },
+      { text: 'moon', clue: true },
+      { text: ' shone.', clue: false },
+    ]);
+    expect(markClues('big dog', ['big', 'big dog'])).toEqual([{ text: 'big dog', clue: true }]);
+    expect(markClues('no clues', [])).toEqual([{ text: 'no clues', clue: false }]);
+  });
+});
+
+describe('active questions', () => {
+  const deal = (content = ALL_CONTENT, battles = 40) => {
+    const ids: string[] = [];
+    const types = new Set<string>();
+    for (let seed = 0; seed < battles; seed++) {
+      const dealer = new ChallengeDealer(emptyProgress(), seeded(seed * 7919), content);
+      for (let i = 0; i < 12; i++) {
+        const c = dealer.next();
+        ids.push(c.id);
+        types.add(c.type);
+      }
+    }
+    return { ids, types };
+  };
+
+  it('never puts inactive questions in a battle', () => {
+    const offWord = { ...WORDS[0], active: false };
+    const offFact = { ...FACTS[0], active: false };
+    const content = { words: [offWord, ...WORDS.slice(1)], facts: [offFact, ...FACTS.slice(1)], reading: READING };
+    const { ids } = deal(content, 150);
+    expect(ids).not.toContain(offWord.id);
+    expect(ids).not.toContain(offFact.id);
+    for (const q of READING.filter((r) => !r.active)) expect(ids).not.toContain(q.id);
+  });
+
+  it('only deals reading once some reading questions are active', () => {
+    const off = READING.map((q): ReadingQuestion => ({ ...q, active: false }));
+    expect(deal({ ...ALL_CONTENT, reading: off }).types.has('reading')).toBe(false);
+    const on = off.map((q, i) => ({ ...q, active: i < 5 }));
+    const { ids, types } = deal({ ...ALL_CONTENT, reading: on });
+    expect(types.has('reading')).toBe(true);
+    const readIds = new Set(ids.filter((id) => id.startsWith('read:')));
+    for (const id of readIds) expect(on.find((q) => q.id === id)?.active).toBe(true);
+  });
+
+  it('shows every question in the grown-ups list, active or not', () => {
+    const all = buildCatalogue();
+    for (const q of READING) expect(all.find((e) => e.id === q.id)?.active).toBe(q.active);
+    const waiting = filterCatalogue(all, { kind: 'all', group: '', status: 'inactive', search: '' });
+    expect(waiting.every((e) => !e.active)).toBe(true);
+    expect(waiting.length).toBe(READING.filter((q) => !q.active).length);
+    const owls = filterCatalogue(all, { kind: 'reading', group: '', status: 'all', search: 'owls' });
+    expect(owls.map((e) => e.answer)).toEqual(['Night-time']);
   });
 });

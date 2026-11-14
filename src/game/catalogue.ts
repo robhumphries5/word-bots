@@ -3,10 +3,11 @@
 // where it came from.
 
 import { FACTS, type Topic } from '../content/facts';
+import { READING, SKILLS } from '../content/reading';
 import { WORDS, type WordLevel } from '../content/words';
 import { allSums, solve, sumId, sumText, SUMS_SOURCE } from './sums';
 
-export type Kind = 'spelling' | 'fact' | 'sum';
+export type Kind = 'spelling' | 'reading' | 'fact' | 'sum';
 
 export interface Entry {
   id: string;
@@ -18,6 +19,13 @@ export interface Entry {
   /** Wrong options shown in battle (empty for spelling and sums). */
   wrong: string[];
   source: string;
+  /** Used in battles. Inactive ones are waiting for a grown-up to approve them. */
+  active: boolean;
+  /** Reading questions only: the passage and the clue phrases in it. */
+  passage?: string;
+  clues?: string[];
+  /** What it practises, e.g. the curriculum statement. */
+  note?: string;
 }
 
 export const TOPIC_NAMES: Record<Topic, string> = {
@@ -34,16 +42,23 @@ export function buildCatalogue(): Entry[] {
   return [
     ...WORDS.map((w): Entry => ({
       id: w.id, kind: 'spelling', group: LEVEL_NAMES[w.level],
-      question: w.clue, answer: w.word, wrong: [], source: w.source,
+      question: w.clue, answer: w.word, wrong: [], source: w.source, active: w.active,
+    })),
+    ...READING.map((q): Entry => ({
+      id: q.id, kind: 'reading', group: SKILLS[q.skill].name,
+      question: q.question, answer: q.answer, wrong: q.options.filter((o) => o !== q.answer),
+      source: q.source, active: q.active, passage: q.passage, clues: q.clues, note: SKILLS[q.skill].practises,
     })),
     ...FACTS.map((f): Entry => ({
       id: f.id, kind: 'fact', group: TOPIC_NAMES[f.topic],
       question: f.kind === 'tf' ? `True or false? ${f.question}` : f.question,
       answer: f.answer, wrong: f.kind === 'tf' ? [] : f.options.filter((o) => o !== f.answer), source: f.source,
+      active: f.active,
     })),
     ...allSums().map((s): Entry => ({
       id: sumId(s.a, s.op, s.b), kind: 'sum', group: OP_NAMES[s.op],
       question: sumText(s), answer: String(solve(s.a, s.op, s.b)), wrong: [], source: SUMS_SOURCE,
+      active: true,
     })),
   ];
 }
@@ -56,6 +71,7 @@ export interface Filter {
   kind: Kind | 'all';
   /** '' means every group. */
   group: string;
+  status: 'all' | 'active' | 'inactive';
   search: string;
 }
 
@@ -65,8 +81,9 @@ export function filterCatalogue(entries: Entry[], f: Filter): Entry[] {
   return entries.filter((e) => {
     if (f.kind !== 'all' && e.kind !== f.kind) return false;
     if (f.group && e.group !== f.group) return false;
+    if (f.status !== 'all' && e.active !== (f.status === 'active')) return false;
     if (words.length === 0) return true;
-    const text = [e.question, e.answer, ...e.wrong, e.group].join(' ').toLowerCase();
+    const text = [e.question, e.answer, ...e.wrong, e.group, e.passage ?? ''].join(' ').toLowerCase();
     return words.every((w) => text.includes(w));
   });
 }

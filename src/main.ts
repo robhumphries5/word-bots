@@ -11,6 +11,7 @@ import {
 } from './game/levels';
 import { buildCatalogue, filterCatalogue, groupsOf, type Entry, type Filter, type Kind } from './game/catalogue';
 import { loadProgress, recordAnswer, resetProgress, saveProgress, type Store } from './game/progress';
+import { markClues } from './game/clues';
 import { hintsFor, isSpelt, makeTiles, markSlots, pickHint } from './game/spelling';
 import { sumSpoken, sumText } from './game/sums';
 import { Robot } from './ui/robot';
@@ -129,10 +130,11 @@ function showSettings(): void {
 const KIND_TABS: { kind: Kind | 'all'; name: string }[] = [
   { kind: 'all', name: 'All' },
   { kind: 'spelling', name: 'Spelling' },
+  { kind: 'reading', name: 'Reading' },
   { kind: 'fact', name: 'Facts' },
   { kind: 'sum', name: 'Sums' },
 ];
-const KIND_NAMES: Record<Kind, string> = { spelling: 'Spelling', fact: 'Fact', sum: 'Sum' };
+const KIND_NAMES: Record<Kind, string> = { spelling: 'Spelling', reading: 'Reading', fact: 'Fact', sum: 'Sum' };
 
 function hostOf(url: string): string {
   try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return url; }
@@ -140,15 +142,18 @@ function hostOf(url: string): string {
 
 function questionRow(e: Entry): HTMLElement {
   const missed = progress.missed[e.id] ?? 0;
-  return h('article', { class: 'q-row' },
+  return h('article', { class: e.active ? 'q-row' : 'q-row inactive' },
     h('div', { class: 'q-meta' },
       h('span', { class: `q-kind q-${e.kind}` }, KIND_NAMES[e.kind]),
       h('span', {}, e.group),
+      h('span', { class: e.active ? 'q-status on' : 'q-status off' }, e.active ? 'In battles' : 'Waiting for approval'),
       missed > 0 ? h('span', { class: 'q-missed' }, `Missed ${missed}×`) : null,
     ),
+    e.passage ? passageEl(e.passage, e.clues ?? [], true) : null,
     h('p', { class: 'q-question' }, e.question),
     h('p', { class: 'q-answer' }, '✔ ', e.answer),
     e.wrong.length > 0 ? h('p', { class: 'q-wrong' }, '✘ ', e.wrong.join(' · ')) : null,
+    e.note ? h('p', { class: 'q-note' }, `Practises: ${e.note}`) : null,
     h('a', { class: 'q-source', href: e.source, target: '_blank', rel: 'noopener noreferrer' }, `Source: ${hostOf(e.source)} ↗`),
   );
 }
@@ -157,11 +162,18 @@ function questionRow(e: Entry): HTMLElement {
 function showQuestions(): void {
   stopSpeaking();
   const all = buildCatalogue();
-  const filter: Filter = { kind: 'all', group: '', search: '' };
+  const filter: Filter = { kind: 'all', group: '', status: 'all', search: '' };
   const count = h('p', { class: 'q-count', 'aria-live': 'polite' });
   const list = h('div', { class: 'q-list' });
   const tabs = h('div', { class: 'q-tabs', role: 'tablist' });
   const group = h('select', { class: 'q-select', 'aria-label': 'Topic or level' }) as HTMLSelectElement;
+  const status = h('select', { class: 'q-select', 'aria-label': 'In battles or waiting for approval' }) as HTMLSelectElement;
+  const waiting = all.filter((e) => !e.active).length;
+  status.append(
+    h('option', { value: 'all' }, 'Active and inactive'),
+    h('option', { value: 'active' }, `In battles (${all.length - waiting})`),
+    h('option', { value: 'inactive' }, `Waiting for approval (${waiting})`),
+  );
   const search = h('input', {
     class: 'q-search', type: 'search', placeholder: 'Search questions and answers',
     autocomplete: 'off', 'aria-label': 'Search questions and answers',
@@ -179,7 +191,7 @@ function showQuestions(): void {
     const groups = groupsOf(all, filter.kind);
     group.hidden = groups.length === 0;
     group.replaceChildren(
-      h('option', { value: '' }, filter.kind === 'spelling' ? 'All levels' : filter.kind === 'sum' ? 'All kinds' : 'All topics'),
+      h('option', { value: '' }, filter.kind === 'spelling' ? 'All levels' : filter.kind === 'sum' ? 'All kinds' : filter.kind === 'reading' ? 'All skills' : 'All topics'),
       ...groups.map((g) => h('option', { value: g }, g)),
     );
     group.value = filter.group;
@@ -191,6 +203,7 @@ function showQuestions(): void {
     list.scrollTop = 0;
   };
   group.addEventListener('change', () => { filter.group = group.value; paint(); });
+  status.addEventListener('change', () => { filter.status = status.value as Filter['status']; paint(); });
   search.addEventListener('input', () => { filter.search = search.value; paint(); });
 
   app.replaceChildren(
@@ -199,7 +212,7 @@ function showQuestions(): void {
         h('button', { class: 'icon-btn', 'aria-label': 'Back', onClick: () => { sfx.tap(); showTitle(); } }, '←'),
         h('h2', {}, 'All questions'),
       ),
-      h('div', { class: 'q-controls' }, tabs, h('div', { class: 'q-filters' }, search, group), count),
+      h('div', { class: 'q-controls' }, tabs, h('div', { class: 'q-filters' }, search, group, status), count),
       list,
     ),
   );
@@ -331,6 +344,7 @@ function say(text: string, ms = 2200): void {
 function spokenText(c: Challenge): string {
   if (c.type === 'spelling') return c.word.clue;
   if (c.type === 'sum') return sumSpoken(c.sum);
+  if (c.type === 'reading') return `${c.reading.passage} ${c.reading.question}`;
   return c.fact.kind === 'tf' ? `${c.fact.question} True or false?` : c.fact.question;
 }
 
@@ -350,9 +364,28 @@ function nextChallenge(): void {
   else if (c.type === 'fact') {
     const label = c.fact.kind === 'tf' ? 'True or false?' : 'Quiz!';
     renderChoices(label, c.fact.question, c.options, c.fact.answer, c.fact.kind === 'tf');
+  } else if (c.type === 'reading') {
+    renderReading(c);
   } else {
     renderChoices('Sum!', sumText(c.sum), c.sum.options.map(String), String(c.sum.answer), false, true);
   }
+}
+
+/** A passage whose clue words can be lit up once the question is answered. */
+function passageEl(passage: string, clues: string[], showClues: boolean): HTMLElement {
+  const el = h('p', { class: 'passage' });
+  el.append(...markClues(passage, showClues ? clues : []).map((p) => (p.clue ? h('mark', { class: 'clue' }, p.text) : p.text)));
+  return el;
+}
+
+function renderReading(c: Extract<Challenge, { type: 'reading' }>): void {
+  const { passage, clues, question, answer } = c.reading;
+  const box = passageEl(passage, clues, false);
+  renderChoices('Read it!', question, c.options, answer, false, false, {
+    before: box,
+    // Show which words gave the answer away.
+    onAnswered: () => box.replaceWith(passageEl(passage, clues, true)),
+  });
 }
 
 /**
@@ -400,7 +433,17 @@ function nextButton(): HTMLElement {
 
 // --- multiple choice (facts and sums) --------------------------------------
 
-function renderChoices(label: string, prompt: string, options: string[], answer: string, trueFalse: boolean, isSum = false): void {
+interface ChoiceExtras {
+  /** Shown above the question (e.g. a reading passage). */
+  before?: HTMLElement;
+  /** Called as soon as an option is picked, right or wrong. */
+  onAnswered?: () => void;
+}
+
+function renderChoices(
+  label: string, prompt: string, options: string[], answer: string, trueFalse: boolean, isSum = false,
+  extras: ChoiceExtras = {},
+): void {
   const buttons = options.map((opt) =>
     h('button', { class: `choice${trueFalse ? ' tf tf-' + opt.toLowerCase() : ''}` }, opt) as HTMLButtonElement,
   );
@@ -411,10 +454,11 @@ function renderChoices(label: string, prompt: string, options: string[], answer:
       const right = options[i] === answer;
       btn.classList.add(right ? 'right' : 'wrong');
       if (!right) buttons[options.indexOf(answer)].classList.add('right');
+      extras.onAnswered?.();
       const carryOn = await resolve(right);
       if (!carryOn) return;
       if (right) {
-        await wait(900);
+        await wait(extras.onAnswered ? 1800 : 900);
         nextChallenge();
       } else {
         footer.replaceChildren(h('p', { class: 'reveal' }, `The answer is: ${answer}`), nextButton());
@@ -423,8 +467,9 @@ function renderChoices(label: string, prompt: string, options: string[], answer:
   );
   battle.card.replaceChildren(
     h('div', { class: 'label' }, label),
-    h('p', { class: isSum ? 'prompt sum-prompt' : 'prompt' }, prompt),
-    h('div', { class: `choices${trueFalse ? ' two' : ''}` }, ...buttons),
+    ...(extras.before ? [extras.before] : []),
+    h('p', { class: isSum ? 'prompt sum-prompt' : extras.before ? 'prompt question' : 'prompt' }, prompt),
+    h('div', { class: `choices${trueFalse ? ' two' : ''}${extras.before ? ' stack' : ''}` }, ...buttons),
     footer,
   );
 }

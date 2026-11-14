@@ -476,3 +476,27 @@ button:disabled { cursor: default; }
 .q-wrong { color: #b33; }
 .q-source { margin-top: auto; font-size: 0.9rem; color: #3a5bd9; word-break: break-all; }
 .q-empty { color: #fff; font-size: 1.2rem; }
+
+/* ---------- reading ---------- */
+
+.passage {
+  margin: 0;
+  font-size: clamp(1.25rem, 3.8vh, 2rem);
+  line-height: 1.45;
+  background: #fff;
+  border-left: 6px solid #4aa8ff;
+  border-radius: 10px;
+  padding: 0.6em 0.8em;
+}
+.passage .clue { background: #ffe27a; color: inherit; border-radius: 4px; padding: 0 0.1em; }
+.prompt.question { font-size: clamp(1.2rem, 3.6vh, 1.9rem); }
+.choices.stack { grid-template-columns: 1fr; gap: 1.2vh; }
+.choices.stack .choice { min-height: 3.2rem; font-size: clamp(1.1rem, 3.2vh, 1.7rem); }
+
+.q-row .passage { font-size: 1rem; padding: 0.4em 0.6em; border-left-width: 4px; background: #f1efe4; }
+.q-kind.q-reading { background: #1aa39a; }
+.q-status { font-weight: 700; padding: 0.1em 0.6em; border-radius: 999px; }
+.q-status.on { background: #dff5e7; color: var(--go-dark); }
+.q-status.off { background: #ffe9c7; color: #9a5a00; }
+.q-row.inactive { outline: 3px dashed #e0a030; outline-offset: -3px; }
+.q-note { font-size: 0.85rem; color: var(--muted); }

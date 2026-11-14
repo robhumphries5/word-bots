@@ -17,6 +17,8 @@ export interface SpellingWord {
   clue: string;
   level: WordLevel;
   source: string;
+  /** Only active words are used in battles. New ones start inactive until a grown-up approves them. */
+  active: boolean;
 }
 
 const w = (word: string, level: WordLevel, clue: string): SpellingWord => ({
@@ -25,6 +27,7 @@ const w = (word: string, level: WordLevel, clue: string): SpellingWord => ({
   clue,
   level,
   source: WORD_LIST_SOURCE,
+  active: true,
 });
 
 export const WORDS: SpellingWord[] = [

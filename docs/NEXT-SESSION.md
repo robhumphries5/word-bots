@@ -39,3 +39,8 @@ Last updated: 2026-11-13 (third session).
 ## Handy
 - Headless play-testing worked with `puppeteer-core` driving the installed Chrome (`C:/Program Files/Google/Chrome/Application/chrome.exe`) against `npx vite preview`. Edge failed to launch headless.
 - Icons are regenerated with `node scripts/make-icons.mjs`.
+
+## Active questions and approval (added 2026-11-14)
+- Every word, fact and reading question has an `active` flag. Battles only use active ones (`ChallengeDealer` filters them). Sums are always active.
+- **New content goes in with `active: false`.** It shows in Grown-ups > All questions with a "Waiting for approval" badge, and the parent approves it there. To approve, set `active: true` on the item (for reading questions, pass `true` as the last argument to `r(...)`).
+- **Reading comprehension** (`src/content/reading.ts`): 15 original passages, 3 each for Find it, Work it out, Word meaning, Feelings and What next?. Each skill links to the curriculum statement it practises. All are inactive until approved. The "Read it!" card only appears in battles once at least one is active. After answering, the `clues` phrases are highlighted in the passage.

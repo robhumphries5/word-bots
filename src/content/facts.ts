@@ -14,14 +14,16 @@ export interface Fact {
   options: string[];
   answer: string;
   source: string;
+  /** Only active facts are used in battles. New ones start inactive until a grown-up approves them. */
+  active: boolean;
 }
 
 const mc = (id: string, topic: Topic, question: string, answer: string, wrong: string[], source: string): Fact => ({
-  id: 'fact:' + id, topic, kind: 'mc', question, options: [answer, ...wrong], answer, source,
+  id: 'fact:' + id, topic, kind: 'mc', question, options: [answer, ...wrong], answer, source, active: true,
 });
 const tf = (id: string, topic: Topic, statement: string, answer: boolean, source: string): Fact => ({
   id: 'fact:' + id, topic, kind: 'tf', question: statement, options: ['True', 'False'],
-  answer: answer ? 'True' : 'False', source,
+  answer: answer ? 'True' : 'False', source, active: true,
 });
 
 const NASA_PLANETS = 'https://science.nasa.gov/solar-system/planets/';
