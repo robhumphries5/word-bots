@@ -147,8 +147,8 @@ describe('spelling hints', () => {
 });
 
 describe('dealing a battle', () => {
-  it('mixes types roughly a third each, never three in a row, with no repeats', () => {
-    const counts: Record<string, number> = { spelling: 0, fact: 0, sum: 0 };
+  it('mixes types roughly evenly, never three in a row, with no repeats', () => {
+    const counts: Record<string, number> = { spelling: 0, fact: 0, sum: 0, reading: 0 };
     for (let seed = 0; seed < 50; seed++) {
       const dealer = new ChallengeDealer(emptyProgress(), seeded(seed));
       const deal = Array.from({ length: 12 }, () => dealer.next());
@@ -158,7 +158,7 @@ describe('dealing a battle', () => {
       }
       for (const c of deal) counts[c.type]++;
     }
-    for (const n of Object.values(counts)) expect(n / 600).toBeGreaterThan(0.25);
+    for (const n of Object.values(counts)) expect(n / 600).toBeGreaterThan(0.2);
   });
 
   it('does not always use the same type pattern', () => {
